@@ -1,11 +1,29 @@
 import { readFileSync } from 'fs'
-import { compose, subtract, divide, __, sum, map } from 'ramda'
+import * as R from 'ramda'
 
-const input = readFileSync('1/input.txt')
-  .toString()
-  .split('\n')
-  .map(Number)
-const calculateFuelPerItem = compose(subtract(__, 2), Math.floor, divide(__, 3))
-const calculateTotalFuel = compose(sum, map(calculateFuelPerItem))
-const total = calculateTotalFuel(input)
-console.log('Total fuel: ', total)
+const parseInput = R.compose(
+  R.filter(R.complement(Number.isNaN)),
+  R.map((s: string) => parseInt(s, 10)),
+)
+const calculateFuelPerItem = R.compose(
+  R.flip(R.subtract)(2),
+  Math.floor,
+  R.flip(R.divide)(3),
+)
+const calculateFuelForFuel = R.compose(
+  R.sum,
+  R.unfold((weight: number) =>
+    weight <= 0 ? false : [weight, calculateFuelPerItem(weight)],
+  ),
+)
+
+const moduleWeights = parseInput(
+  readFileSync('1/input.txt')
+    .toString()
+    .split('\n'),
+)
+const moduleFuelWeights = R.map(calculateFuelPerItem, moduleWeights)
+const totalNaive = R.sum(moduleFuelWeights)
+const total = R.sum(R.map(calculateFuelForFuel, moduleFuelWeights))
+console.log('Naive total fuel: ', totalNaive)
+console.log('Proper total fuel: ', total)
