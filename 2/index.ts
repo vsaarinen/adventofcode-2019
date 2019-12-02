@@ -36,6 +36,7 @@ const actionForOpCode = R.cond<number, (a: number, b: number) => number>([
   ],
 ])
 
+// FIXME: Ugh, fail. How would this be done in a functional style?
 const possibilities = R.xprod(R.range(0, 100), R.range(0, 100))
 let noun: number
 let verb: number
