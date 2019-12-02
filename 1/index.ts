@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import * as R from 'ramda'
 
 const parseInput = R.compose(
-  R.filter(R.complement(Number.isNaN)),
+  R.reject(Number.isNaN),
   R.map((s: string) => parseInt(s, 10)),
 )
 const calculateFuelPerItem = R.compose(
