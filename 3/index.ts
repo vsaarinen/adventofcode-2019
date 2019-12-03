@@ -3,6 +3,14 @@ import * as R from 'ramda'
 
 type Direction = 'R' | 'U' | 'L' | 'D'
 type Coordinate = [number, number]
+type CoordinateWithCount = [number, number, number]
+const getXCoord = R.view<CoordinateWithCount | Coordinate, number>(
+  R.lensIndex(0),
+)
+const getYCoord = R.view<CoordinateWithCount | Coordinate, number>(
+  R.lensIndex(1),
+)
+const getCount = R.view<CoordinateWithCount, number>(R.lensIndex(2))
 interface Movement {
   direction: Direction
   amount: number
@@ -69,7 +77,7 @@ function getFinalPosition(
 }
 
 /**
- * @param start First number
+ * @param start Starting number
  * @param end Last number, inclusive
  */
 function range(start: number, end: number) {
@@ -84,62 +92,117 @@ function trailsBetweenPositions(
   startPosition: Coordinate,
   endPosition: Coordinate,
 ) {
-  const [xPositions, yPositions] = [0, 1].map(coord =>
-    range(startPosition[coord], endPosition[coord]),
+  const coordinates = [getXCoord, getYCoord].map(getCoord =>
+    range(getCoord(startPosition), getCoord(endPosition)),
   )
-  if (xPositions.length !== 1 && yPositions.length !== 1) {
+  if (coordinates.every(c => c.length !== 1)) {
     throw new Error(
       "Shouldn't move on more than one dimension! " +
-        xPositions.length +
+        coordinates[0].length +
         ' ' +
-        yPositions.length,
+        coordinates[1].length,
     )
   }
-  return R.xprod(xPositions, yPositions) as Coordinate[] // Ugh
-}
-
-function coordinatesEqual(a: Coordinate, b: Coordinate) {
-  return a[0] === b[0] && a[1] === b[1]
+  // Remove the first one since we don't want to double-count the initial position
+  return R.tail(R.xprod(coordinates[0], coordinates[1])) as Coordinate[]
 }
 
 function generateTrails(movements: Movement[]) {
   const generate = R.reduce(
     (
-      [position, trails]: [Coordinate, Coordinate[]],
+      [moveCount, position, trails]: [
+        number,
+        Coordinate,
+        CoordinateWithCount[],
+      ],
       command: Movement,
-    ): [Coordinate, Coordinate[]] => {
+    ): [number, Coordinate, CoordinateWithCount[]] => {
       const finalPosition = getFinalPosition(command, position)
+      const newTrails = trailsBetweenPositions(position, finalPosition)
       return [
+        moveCount + newTrails.length,
         finalPosition,
-        trails.concat(trailsBetweenPositions(position, finalPosition)),
+        trails.concat(
+          newTrails.map((coordinate, i) => [
+            getXCoord(coordinate),
+            getYCoord(coordinate),
+            i + 1 + moveCount,
+          ]),
+        ),
       ]
     },
-    [[0, 0], []],
+    [0, [0, 0], []],
   )
-  const [, trails] = generate(movements)
-  // Shouldn't really need to do this but speeds up the intersection detection later on
-  const uniqueTrails = R.uniqWith(coordinatesEqual, trails)
-  console.log('Generated' + uniqueTrails.length + 'trails')
-  return uniqueTrails
+  const [, , trails] = generate(movements)
+  return trails
+}
+
+class TwoKeyMap<T> {
+  private __map__: {
+    [firstKey: number]: { [secondKey: number]: T | undefined } | undefined
+  }
+
+  constructor() {
+    this.__map__ = {}
+  }
+
+  public get = (key: number, nestedKey: number) => {
+    return this.__map__[key]?.[nestedKey]
+  }
+
+  public set = (key: number, nestedKey: number, value: T) => {
+    if (!this.__map__[key]) {
+      this.__map__[key] = {}
+    }
+
+    if (!this.__map__[key]![nestedKey]) {
+      Object.defineProperty(this.__map__[key], nestedKey, {
+        value: value,
+        configurable: true,
+        enumerable: true,
+      })
+    }
+
+    return this
+  }
+}
+
+function findIntersections(trails: CoordinateWithCount[][]) {
+  const firstWireTrailsMap = trails[0].reduce(
+    (map, trail) => map.set(getXCoord(trail), getYCoord(trail), trail),
+    new TwoKeyMap<CoordinateWithCount>(),
+  )
+  return trails[1].reduce<Array<[CoordinateWithCount, CoordinateWithCount]>>(
+    (result, trail): Array<[CoordinateWithCount, CoordinateWithCount]> => {
+      const firstWireTrail = firstWireTrailsMap.get(
+        getXCoord(trail),
+        getYCoord(trail),
+      )
+      if (firstWireTrail) {
+        return result.concat([[firstWireTrail, trail]])
+      }
+      return result
+    },
+    [],
+  )
 }
 
 const getTrails = R.map(generateTrails)
 
-const getIntersections = R.pipe(
-  R.apply(R.innerJoin(coordinatesEqual)), // This is really slow
-  R.reject(R.equals([0, 0])), // Don't count [0, 0]
-)
+// const getIntersections = R.apply(R.innerJoin(coordinatesEqual)), // This is really slow
 
-const getClosestDistance = R.pipe(
-  R.map(R.compose(R.sum, R.map(Math.abs))),
-  R.reduce(R.min, Number.POSITIVE_INFINITY),
-)
+const toDistances = R.map(R.compose(R.sum, R.map(getCount)))
+
+const getMin = R.reduce(R.min, Number.POSITIVE_INFINITY)
 
 const lines: Movement[][] = parseInput(readFileSync('3/input.txt').toString())
-console.log('Parsed lines')
-const trails = getTrails(lines)
-console.log(`Done generating trails`)
-const intersections = getIntersections(trails)
-console.log(`Found ${intersections.length} intersections`)
-const closest = getClosestDistance(intersections)
-console.log('Closest intersection distance: ', closest)
+const findShortestDistanceToIntersection = R.pipe(
+  getTrails,
+  findIntersections,
+  toDistances,
+  getMin,
+)
+console.log(
+  'Closest intersection distance: ',
+  findShortestDistanceToIntersection(lines),
+)
