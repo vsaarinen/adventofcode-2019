@@ -6,12 +6,11 @@ const checkHasExactlyTwoAdjacentNumbers = R.pipe(
   R.split(/(?<=([1-9]))(?=[1-9])(?!\1)/),
   R.any(R.propEq('length', 2)),
 )
-const checkAscendingNumbers = R.pipe<string, string[], string[][], boolean>(
+const checkAscendingNumbers = R.pipe(
   R.split(''),
   R.aperture(2),
   R.all(R.apply(R.lte as any)),
 )
-
 const countOfNumbers = R.pipe(
   R.map(R.toString),
   R.filter(
