@@ -34,10 +34,29 @@ const countOrbits = R.pipe(
   R.sum,
 )
 
+function hierarchyTree(system: System) {
+  function iterator(id: string): string[] {
+    const orbiter = system[id]
+    return !orbiter ? [id] : [id].concat(iterator(orbiter.orbits))
+  }
+  return iterator
+}
+
 const orbitPairs = parseInput(
   readFileSync('6/input.txt')
     .toString()
     .split('\n'),
 )
 
-console.log('Total orbits:', countOrbits(generateSystem(orbitPairs)))
+const system = generateSystem(orbitPairs)
+
+const findShortestPath = R.pipe(
+  R.map(hierarchyTree(system)),
+  R.apply(R.symmetricDifference),
+  R.length as any,
+  // We need to remove 'YOU' and 'SAN', re-add the common ancestor but remove
+  // one since we're calculating movement
+  R.subtract(R.__, 2),
+)
+console.log('Total orbits:', countOrbits(system))
+console.log('Shortest path length:', findShortestPath(['YOU', 'SAN']))
