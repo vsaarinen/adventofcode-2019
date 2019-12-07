@@ -26,11 +26,11 @@ const FUNCTION_FOR_OPERATION: {
   },
   [Operation.INPUT]: function() {
     const value = INPUT.shift()
-    console.log('Sending input:', value)
+    // console.log('Sending input:', value)
     return value
   },
   [Operation.OUTPUT]: function(value: number) {
-    console.log('Output:', value)
+    // console.log('Output:', value)
     OUTPUT.push(value)
     return value
   },
@@ -191,8 +191,8 @@ const originalIntcodes = parseIntcodes(
     .split(','),
 )
 
-function runProgram(inputs: number[]) {
-  INPUT = inputs
+function* createProgram(initialInputs: number[]) {
+  INPUT = initialInputs
   OUTPUT = []
 
   let i = 0
@@ -203,6 +203,9 @@ function runProgram(inputs: number[]) {
     const result = performActionAndUpdate(action, i, intcodes)
     intcodes = result.intcodes
     i = result.jumpTarget
+    if (OUTPUT.length > 0) {
+      yield OUTPUT.shift()
+    }
   }
 }
 
@@ -223,12 +226,23 @@ function permutations(
 }
 
 function runConfiguration(permutation: number[]) {
+  let previousResult = 0
+  const programs = permutation.map(d => {
+    const program = createProgram([d, previousResult])
+    previousResult = program.next().value as number // This side-effect is ugly
+    return program
+  })
   let i = 0
-  OUTPUT = [0]
-  while (i < 5) {
-    runProgram([permutation[i++], OUTPUT[0]])
+  while (true) {
+    INPUT.push(previousResult)
+    const result = programs[i].next()
+    if (result.done) {
+      break
+    }
+    i = (i + 1) % 5
+    previousResult = result.value!
   }
-  return OUTPUT[0]
+  return previousResult
 }
 
 const getHighestOutput = R.pipe(
@@ -236,4 +250,4 @@ const getHighestOutput = R.pipe(
   R.reduce(R.max, Number.NEGATIVE_INFINITY),
 )
 
-console.log('Highest:', getHighestOutput(permutations([0, 1, 2, 3, 4])))
+console.log('Highest:', getHighestOutput(permutations([5, 6, 7, 8, 9])))
